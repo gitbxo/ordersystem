@@ -25,11 +25,11 @@ public class ItemInfo {
 	return name;
     }
 
-    public long getPrepareTimeSecond() {
+    public long getPrepareTimeSeconds() {
 	return prepareTimeSeconds;
     }
 
-    public long getExpiryTimeSecond() {
+    public long getExpiryTimeSeconds() {
 	return expiryTimeSeconds;
     }
 

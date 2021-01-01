@@ -12,10 +12,12 @@ import org.springframework.beans.factory.annotation.Value;
 // import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
+import org.bxo.ordersystem.api.model.ItemInfo;
 import org.bxo.ordersystem.api.model.OrderInfo;
 import org.bxo.ordersystem.api.model.OrderItem;
-import org.bxo.ordersystem.model.OrderDetail;
 import org.bxo.ordersystem.model.ItemDetail;
+import org.bxo.ordersystem.model.OrderDetail;
+import org.bxo.ordersystem.service.ItemService;
 import org.bxo.ordersystem.service.TaskService;
 
 @Service
@@ -26,6 +28,9 @@ public class TaskServiceImpl implements TaskService {
 
     @Autowired
     private JobScheduler jobScheduler;
+
+    @Autowired
+    private ItemService itemService;
 
     @Value("${org.jobrunr.background-job-server.worker_count:10}")
     private Long workerCount;
@@ -61,6 +66,14 @@ public class TaskServiceImpl implements TaskService {
 	if (null == item) {
 	    System.err.printf("Order %s missing item %s to prepare%n", orderId, itemId);
 	    return;
+	}
+	ItemInfo info = itemService.getItem(itemId);
+	if (info != null) {
+	    long prepareSeconds = info.getPrepareTimeSeconds();
+	    try {
+		Thread.sleep(prepareSeconds * 1000);
+	    } catch (InterruptedException e) {
+	    }
 	}
 	long newQty = item.addPreparedQty(1);
 	System.out.printf(
