@@ -1,0 +1,20 @@
+
+server:
+  port: 9000
+
+management:
+  server:
+    port: 9001
+    address: 127.0.0.1
+
+org:
+  jobrunr:
+    background-job-server:
+      enabled: true
+      poll_interval: 5    # check for new work every 5 seconds
+      worker_count:  3    # number of workers
+      delete_succeeded_jobs_after: 36  # mark succeeded jobs for deletion after 36 hours
+      permanently_delete_deleted_jobs_after: 72  # deleted jobs will be deleted permanently after 72 hours
+    dashboard:
+      enabled: true
+      port: 9100         # the port on which to start the dashboard
