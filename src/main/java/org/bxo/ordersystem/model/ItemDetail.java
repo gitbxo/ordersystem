@@ -12,7 +12,7 @@ public class ItemDetail {
     private final AtomicLong quantity;
     private final AtomicLong preparedQty;
     private final AtomicLong expiredQty;
-    private List<Long> prepareTimeList;
+    private final List<Long> prepareTimeList;
 
     public ItemDetail(UUID itemId, long quantity) {
 	this(itemId, quantity, 0L);

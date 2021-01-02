@@ -1,5 +1,7 @@
 package org.bxo.ordersystem.service.impl;
 
+import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
@@ -9,7 +11,6 @@ import java.util.UUID;
 import org.jobrunr.scheduling.JobScheduler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-// import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import org.bxo.ordersystem.api.model.ItemInfo;
@@ -23,34 +24,61 @@ import org.bxo.ordersystem.service.TaskService;
 @Service
 public class TaskServiceImpl implements TaskService {
 
-    // @Autowired
-    // private AsyncTaskExecutor workerExecutor;
-
     @Autowired
     private JobScheduler jobScheduler;
 
     @Autowired
     private ItemService itemService;
 
-    @Value("${org.jobrunr.background-job-server.worker_count:10}")
+    @Value("${org.jobrunr.background-job-server.worker_count}")
     private Long workerCount;
 
     private static ConcurrentHashMap<UUID, OrderDetail> orderMap = new ConcurrentHashMap<>();
 
+    private static ConcurrentHashMap<UUID, Long> itemPrepareMap = new ConcurrentHashMap<>();
+
+    private static AtomicLong availableEpochMillis = new AtomicLong(0L);
+
     @Override
     public void acceptOrder(OrderInfo order) {
 	UUID orderId = order.getOrderId();
-	if (orderMap.containsKey(orderId)) {
+	if (null != orderMap.putIfAbsent(
+		orderId, new OrderDetail(orderId, order.getItemList()))) {
 	    System.err.printf("Duplicate order %s%n", orderId);
 	    return;
 	}
 	System.out.printf("Accept order %s%n", orderId);
-	// workerExecutor.submit(createTask(1));
-	orderMap.putIfAbsent(orderId, new OrderDetail(orderId, order.getItemList()));
+
+	Long epochMillis = System.currentTimeMillis();
+	Long availableTime = availableEpochMillis.get();
+	while (availableTime < epochMillis) {
+	    availableEpochMillis.compareAndSet(availableTime, epochMillis);
+	    availableTime = availableEpochMillis.get();
+	}
+
+	long orderPrepareMillis = 0L;
+	for (OrderItem item : order.getItemList()) {
+	    long itemPrepareMillis = getItemPrepareMillis(item.getItemId()) * item.getQuantity();
+	    orderPrepareMillis += itemPrepareMillis;
+	}
+	if (orderPrepareMillis > 0L) {
+	    availableTime = availableEpochMillis.addAndGet(
+		orderPrepareMillis / workerCount);
+	}
+
 	for (OrderItem item : order.getItemList()) {
 	    UUID itemId = item.getItemId();
+	    long itemScheduleSeconds = (
+		availableTime - getItemPrepareMillis(item.getItemId())
+		- epochMillis ) / 1000L;
 	    for (int i=0; i < item.getQuantity(); i++) {
-		jobScheduler.enqueue(() -> this.prepareItem(orderId, itemId));
+		if (itemScheduleSeconds > 0) {
+		    jobScheduler.schedule(
+			() -> this.prepareItem(orderId, itemId),
+			LocalDateTime.now().plusSeconds(itemScheduleSeconds));
+		} else {
+		    jobScheduler.enqueue(() -> this.prepareItem(orderId, itemId));
+		}
 	    }
 	}
     }
@@ -67,11 +95,11 @@ public class TaskServiceImpl implements TaskService {
 	    System.err.printf("Order %s missing item %s to prepare%n", orderId, itemId);
 	    return;
 	}
-	ItemInfo info = itemService.getItem(itemId);
-	if (info != null) {
-	    long prepareSeconds = info.getPrepareTimeSeconds();
+
+	Long prepareMillis = getItemPrepareMillis(itemId);
+	if (prepareMillis > 0) {
 	    try {
-		Thread.sleep(prepareSeconds * 1000);
+		Thread.sleep(prepareMillis);
 	    } catch (InterruptedException e) {
 	    }
 	}
@@ -79,7 +107,6 @@ public class TaskServiceImpl implements TaskService {
 	System.out.printf(
 		"Order %s prepared item %s qty %d of %d%n", orderId, itemId,
 		newQty, item.getQuantity());
-	// workerExecutor.submit(createTask(2));
 
 	if (newQty >= item.getQuantity()) {
 	    boolean allPrepared = true;
@@ -103,7 +130,20 @@ public class TaskServiceImpl implements TaskService {
 	    return;
 	}
 	System.out.printf("Deliver order %s%n", orderId);
-	// workerExecutor.submit(createTask(3));
+    }
+
+    private Long getItemPrepareMillis(UUID itemId) {
+	if (itemPrepareMap.containsKey(itemId)) {
+	    return itemPrepareMap.get(itemId);
+	}
+
+	long prepareSeconds = 0L;
+	ItemInfo info = itemService.getItem(itemId);
+	if (info != null) {
+	    prepareSeconds = info.getPrepareTimeSeconds();
+	}
+	itemPrepareMap.putIfAbsent(itemId, prepareSeconds * 1000L);
+	return itemPrepareMap.get(itemId);
     }
 
     private Callable<String> createTask(int i) {
