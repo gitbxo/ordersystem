@@ -11,7 +11,6 @@ public class ItemDetail {
     private final UUID itemId;
     private final AtomicLong quantity;
     private final AtomicLong preparedQty;
-    private final AtomicLong expiredQty;
     private final List<Long> prepareTimeList;
 
     public ItemDetail(UUID itemId, long quantity) {
@@ -22,7 +21,6 @@ public class ItemDetail {
 	this.itemId = itemId;
 	this.quantity = new AtomicLong(quantity);
 	this.preparedQty = new AtomicLong(preparedQty);
-	this.expiredQty = new AtomicLong(0L);
 	this.prepareTimeList = Collections.synchronizedList(new ArrayList<Long>());
     }
 
@@ -58,8 +56,15 @@ public class ItemDetail {
 	return this.preparedQty.addAndGet(add);
     }
 
-    public long addExpiredQty(long add) {
-	return this.expiredQty.addAndGet(add);
+    public long getExpiredQty(long expiryMillis) {
+	long expiredTime = System.currentTimeMillis() - expiryMillis;
+	long expiredQty = 0L;
+	for (int i=0; i < prepareTimeList.size(); i++) {
+	    if (prepareTimeList.get(i) < expiredTime) {
+		expiredQty += 1;
+	    }
+	}
+	return expiredQty;
     }
 
 }

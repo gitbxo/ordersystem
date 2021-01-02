@@ -35,7 +35,7 @@ public class TaskServiceImpl implements TaskService {
 
     private static ConcurrentHashMap<UUID, OrderDetail> orderMap = new ConcurrentHashMap<>();
 
-    private static ConcurrentHashMap<UUID, Long> itemPrepareMap = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<UUID, ItemInfo> itemMap = new ConcurrentHashMap<>();
 
     private static AtomicLong availableEpochMillis = new AtomicLong(0L);
 
@@ -130,20 +130,25 @@ public class TaskServiceImpl implements TaskService {
 	    return;
 	}
 	System.out.printf("Deliver order %s%n", orderId);
+	for (ItemDetail i : order.getItemList()) {
+	    UUID itemId = i.getItemId();
+	    if (itemMap.containsKey(itemId)) {
+		long expiredQty = i.getExpiredQty(itemMap.get(itemId).getExpiryTimeSeconds() * 1000L);
+		if (expiredQty > 0) {
+		    System.out.printf("Order %s item %s expired Qty %d%n", orderId, itemId, expiredQty);
+		}
+	    }
+	}
     }
 
     private Long getItemPrepareMillis(UUID itemId) {
-	if (itemPrepareMap.containsKey(itemId)) {
-	    return itemPrepareMap.get(itemId);
+	if (!itemMap.containsKey(itemId)) {
+	    itemMap.putIfAbsent(itemId, itemService.getItem(itemId));
 	}
-
-	long prepareSeconds = 0L;
-	ItemInfo info = itemService.getItem(itemId);
-	if (info != null) {
-	    prepareSeconds = info.getPrepareTimeSeconds();
+	if (itemMap.containsKey(itemId)) {
+	    return itemMap.get(itemId).getPrepareTimeSeconds() * 1000L;
 	}
-	itemPrepareMap.putIfAbsent(itemId, prepareSeconds * 1000L);
-	return itemPrepareMap.get(itemId);
+	return 0L;
     }
 
     private Callable<String> createTask(int i) {
