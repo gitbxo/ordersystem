@@ -6,15 +6,15 @@ public class ItemInfo {
 
     private final UUID itemId;
     private final String name;
-    private final long prepareTimeSeconds;
-    private final long expiryTimeSeconds;
+    private final long prepareTimeMillis;
+    private final long expiryTimeMillis;
 
-    public ItemInfo(UUID itemId, String name, long prepareTimeSeconds,
-		    long expiryTimeSeconds) {
+    public ItemInfo(UUID itemId, String name, long prepareTimeMillis,
+		    long expiryTimeMillis) {
 	this.itemId = itemId;
 	this.name = name;
-	this.prepareTimeSeconds = prepareTimeSeconds;
-	this.expiryTimeSeconds = expiryTimeSeconds;
+	this.prepareTimeMillis = prepareTimeMillis;
+	this.expiryTimeMillis = expiryTimeMillis;
     }
 
     public UUID getItemId() {
@@ -25,12 +25,12 @@ public class ItemInfo {
 	return name;
     }
 
-    public long getPrepareTimeSeconds() {
-	return prepareTimeSeconds;
+    public long getPrepareTimeMillis() {
+	return prepareTimeMillis;
     }
 
-    public long getExpiryTimeSeconds() {
-	return expiryTimeSeconds;
+    public long getExpiryTimeMillis() {
+	return expiryTimeMillis;
     }
 
 }

@@ -81,6 +81,9 @@ public class TaskServiceImpl implements TaskService {
 		}
 	    }
 	}
+
+	// Check whether order is ready for delivery
+	this.checkOrder(orderId);
     }
 
     @Override
@@ -109,16 +112,26 @@ public class TaskServiceImpl implements TaskService {
 		newQty, item.getQuantity());
 
 	if (newQty >= item.getQuantity()) {
-	    boolean allPrepared = true;
-	    for (ItemDetail i : order.getItemList()) {
-		if (i.getPreparedQty() < i.getQuantity()) {
-		    allPrepared = false;
-		    break;
-		}
+	    this.checkOrder(orderId);
+	}
+    }
+
+    private void checkOrder(UUID orderId) {
+	OrderDetail order = orderMap.get(orderId);
+	if (null == order) {
+	    System.err.printf("Missing order %s for checking%n", orderId);
+	    return;
+	}
+
+	boolean allPrepared = true;
+	for (ItemDetail i : order.getItemList()) {
+	    if (i.getPreparedQty() < i.getQuantity()) {
+		allPrepared = false;
+		break;
 	    }
-	    if (allPrepared) {
-		jobScheduler.enqueue(() -> this.deliverOrder(orderId));
-	    }
+	}
+	if (allPrepared) {
+	    jobScheduler.enqueue(() -> this.deliverOrder(orderId));
 	}
     }
 
@@ -133,7 +146,7 @@ public class TaskServiceImpl implements TaskService {
 	for (ItemDetail i : order.getItemList()) {
 	    UUID itemId = i.getItemId();
 	    if (itemMap.containsKey(itemId)) {
-		long expiredQty = i.getExpiredQty(itemMap.get(itemId).getExpiryTimeSeconds() * 1000L);
+		long expiredQty = i.getExpiredQty(itemMap.get(itemId).getExpiryTimeMillis());
 		if (expiredQty > 0) {
 		    System.out.printf("Order %s item %s expired Qty %d%n", orderId, itemId, expiredQty);
 		}
@@ -146,7 +159,7 @@ public class TaskServiceImpl implements TaskService {
 	    itemMap.putIfAbsent(itemId, itemService.getItem(itemId));
 	}
 	if (itemMap.containsKey(itemId)) {
-	    return itemMap.get(itemId).getPrepareTimeSeconds() * 1000L;
+	    return itemMap.get(itemId).getPrepareTimeMillis();
 	}
 	return 0L;
     }

@@ -29,22 +29,22 @@ public class ItemController {
     @PostMapping()
     public ItemInfo createItem(
 		@RequestParam(name="name", required=true) String name,
-		@RequestParam(name="prepareSeconds", required=true) long prepareTimeSeconds,
-		@RequestParam(name="expirySeconds", required=true) long expiryTimeSeconds) {
+		@RequestParam(name="prepareMillis", required=true) long prepareTimeMillis,
+		@RequestParam(name="expiryMillis", required=true) long expiryTimeMillis) {
 	return itemService.createItem(
 		UUID.randomUUID(), name,
-		prepareTimeSeconds, expiryTimeSeconds);
+		prepareTimeMillis, expiryTimeMillis);
     }
 
     @PostMapping("/test")
     public ItemInfo createTestItem(
 		@RequestParam(name="itemId", required=true) String itemId,
 		@RequestParam(name="name", required=true) String name,
-		@RequestParam(name="prepareSeconds", required=true) long prepareTimeSeconds,
-		@RequestParam(name="expirySeconds", required=true) long expiryTimeSeconds) {
+		@RequestParam(name="prepareMillis", required=true) long prepareTimeMillis,
+		@RequestParam(name="expiryMillis", required=true) long expiryTimeMillis) {
 	return itemService.createItem(
 		UUID.fromString(itemId), name,
-		prepareTimeSeconds, expiryTimeSeconds);
+		prepareTimeMillis, expiryTimeMillis);
     }
 
     @DeleteMapping()
