@@ -1,20 +1,35 @@
 package org.bxo.ordersystem.model;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import javax.management.JMRuntimeException;
+
 import org.bxo.ordersystem.api.model.OrderItem;
+
+/*
+ * This class contains an order that will be processed.
+ * This is used both for the shopping cart (when placedOrder = false)
+ * and when the order is being processed (when placedOrder = true)
+ *
+ * TODO: This is a proof of concept.
+ *       Break this up into separate classes when saving to the database.
+ *       The item list will need to be saved in separate table.
+ */
 
 public class OrderDetail {
 
+    private final AtomicBoolean placedOrder;
     private final UUID orderId;
     private final ConcurrentHashMap<UUID, ItemDetail> itemMap;
 
     public OrderDetail(UUID orderId, List<OrderItem> itemList) {
 	this.orderId = orderId;
+	this.placedOrder = new AtomicBoolean(false);
 	this.itemMap = new ConcurrentHashMap<>();
 	if (null != itemList) {
 	    for (OrderItem item : itemList) {
@@ -37,6 +52,9 @@ public class OrderDetail {
     }
 
     public void addItem(UUID itemId, Long quantity) {
+	if (this.placedOrder.get()) {
+	    throw new JMRuntimeException("Cannot modify a placed order");
+	}
 	if (null == quantity || quantity <= 0) {
 	    return;
 	}
@@ -60,9 +78,23 @@ public class OrderDetail {
     }
 
     public void deleteItem(UUID itemId) {
+	if (this.placedOrder.get()) {
+	    throw new JMRuntimeException("Cannot modify a placed order");
+	}
 	if (null != itemMap && itemMap.containsKey(itemId)) {
 	    itemMap.remove(itemId);
 	}
+    }
+
+    public void placeOrder() {
+	if (this.placedOrder.get()) {
+	    throw new JMRuntimeException("Cannot modify a placed order");
+	}
+	this.placedOrder.set(true);
+    }
+
+    public Boolean getPlacedOrder() {
+	return this.placedOrder.get();
     }
 
 }

@@ -6,6 +6,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+/*
+ * This class contains items in the order.
+ * This is used both for the shopping cart
+ * and when the order is being processed
+ *
+ * TODO: This is a proof of concept.
+ *       This is currently saved as part of the OrderDetail,
+ *       but will need to be saved in separate table.
+ */
+
 public class ItemDetail {
 
     private final UUID itemId;

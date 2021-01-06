@@ -1,6 +1,5 @@
 package org.bxo.ordersystem.service.impl;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -13,6 +12,7 @@ import org.bxo.ordersystem.api.model.OrderInfo;
 import org.bxo.ordersystem.api.model.OrderItem;
 import org.bxo.ordersystem.model.ItemDetail;
 import org.bxo.ordersystem.model.OrderDetail;
+import org.bxo.ordersystem.repository.OrderRepository;
 import org.bxo.ordersystem.service.ItemService;
 import org.bxo.ordersystem.service.OrderService;
 import org.bxo.ordersystem.service.TaskService;
@@ -29,12 +29,13 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private JobScheduler jobScheduler;
 
-    private static ConcurrentHashMap<UUID, OrderDetail> orderMap = new ConcurrentHashMap<>();
+    @Autowired
+    private OrderRepository orderRepo;
 
     @Override
     public OrderInfo getOrder(UUID orderId) {
 	OrderInfo orderInfo = null;
-	OrderDetail detail = orderMap.get(orderId);
+	OrderDetail detail = orderRepo.getOrder(orderId);
 	if (null != detail) {
 	    List<OrderItem> itemList = new ArrayList<>();
 	    if (null != detail.getItemList()) {
@@ -50,34 +51,28 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderInfo createOrder(UUID orderId) {
-	if (!orderMap.containsKey(orderId)) {
-	    List<OrderItem> itemList = new ArrayList<>();
-	    orderMap.putIfAbsent(orderId, new OrderDetail(orderId, itemList));
-	}
+	orderRepo.createOrder(orderId);
 	return getOrder(orderId);
     }
 
     @Override
     public OrderInfo submitOrder(UUID orderId) {
 	OrderInfo orderInfo = getOrder(orderId);
-	if (orderMap.containsKey(orderId)) {
-	    orderMap.remove(orderId);
-	    jobScheduler.enqueue(() -> taskService.acceptOrder(orderInfo));
+	if (null != orderInfo && orderInfo.getOrderId().equals(orderId)) {
+	    orderRepo.getOrder(orderId).placeOrder();
+	    jobScheduler.enqueue(() -> taskService.acceptOrder(orderId));
 	}
 	return orderInfo;
     }
 
     @Override
     public void deleteOrder(UUID orderId) {
-	if (orderMap.containsKey(orderId)) {
-	    orderMap.remove(orderId);
-	}
-	return;
+	orderRepo.removeOrder(orderId);
     }
 
     @Override
     public OrderInfo addItem(UUID orderId, UUID itemId, Long quantity) {
-	OrderDetail detail = orderMap.get(orderId);
+	OrderDetail detail = orderRepo.getOrder(orderId);
 	if (null != detail && null != itemService.getItem(itemId)) {
 	    detail.addItem(itemId, quantity);
 	}
@@ -86,7 +81,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderInfo deleteItem(UUID orderId, UUID itemId) {
-	OrderDetail detail = orderMap.get(orderId);
+	OrderDetail detail = orderRepo.getOrder(orderId);
 	if (null != detail) {
 	    detail.deleteItem(itemId);
 	}

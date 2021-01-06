@@ -14,10 +14,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import org.bxo.ordersystem.api.model.ItemInfo;
-import org.bxo.ordersystem.api.model.OrderInfo;
-import org.bxo.ordersystem.api.model.OrderItem;
 import org.bxo.ordersystem.model.ItemDetail;
 import org.bxo.ordersystem.model.OrderDetail;
+import org.bxo.ordersystem.repository.OrderRepository;
 import org.bxo.ordersystem.service.ItemService;
 import org.bxo.ordersystem.service.TaskService;
 
@@ -30,21 +29,25 @@ public class TaskServiceImpl implements TaskService {
     @Autowired
     private ItemService itemService;
 
+    @Autowired
+    private OrderRepository orderRepo;
+
     @Value("${org.jobrunr.background-job-server.worker_count}")
     private Long workerCount;
 
-    private static ConcurrentHashMap<UUID, OrderDetail> orderMap = new ConcurrentHashMap<>();
-
-    private static ConcurrentHashMap<UUID, ItemInfo> itemMap = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<UUID, ItemInfo> itemCache = new ConcurrentHashMap<>();
 
     private static AtomicLong availableEpochMillis = new AtomicLong(0L);
 
     @Override
-    public void acceptOrder(OrderInfo order) {
-	UUID orderId = order.getOrderId();
-	if (null != orderMap.putIfAbsent(
-		orderId, new OrderDetail(orderId, order.getItemList()))) {
-	    System.err.printf("Duplicate order %s%n", orderId);
+    public void acceptOrder(UUID orderId) {
+	OrderDetail order = orderRepo.getOrder(orderId);
+	if (null == order) {
+	    System.err.printf("Missing order %s%n", orderId);
+	    return;
+	}
+	if (!order.getPlacedOrder()) {
+	    System.err.printf("Incomplete order %s%n", orderId);
 	    return;
 	}
 	System.out.printf("Accept order %s%n", orderId);
@@ -57,7 +60,7 @@ public class TaskServiceImpl implements TaskService {
 	}
 
 	long orderPrepareMillis = 0L;
-	for (OrderItem item : order.getItemList()) {
+	for (ItemDetail item : order.getItemList()) {
 	    long itemPrepareMillis = getItemPrepareMillis(item.getItemId()) * item.getQuantity();
 	    orderPrepareMillis += itemPrepareMillis;
 	}
@@ -66,7 +69,7 @@ public class TaskServiceImpl implements TaskService {
 		orderPrepareMillis / workerCount);
 	}
 
-	for (OrderItem item : order.getItemList()) {
+	for (ItemDetail item : order.getItemList()) {
 	    UUID itemId = item.getItemId();
 	    long itemScheduleSeconds = (
 		availableTime - getItemPrepareMillis(item.getItemId())
@@ -88,11 +91,15 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public void prepareItem(UUID orderId, UUID itemId) {
-	if (!orderMap.containsKey(orderId)) {
+	OrderDetail order = orderRepo.getOrder(orderId);
+	if (null == order) {
 	    System.err.printf("Missing order %s to prepare item %s%n", orderId, itemId);
 	    return;
 	}
-	OrderDetail order = orderMap.get(orderId);
+	if (!order.getPlacedOrder()) {
+	    System.err.printf("Incomplete order %s%n", orderId);
+	    return;
+	}
 	ItemDetail item = order.getItemDetail(itemId);
 	if (null == item) {
 	    System.err.printf("Order %s missing item %s to prepare%n", orderId, itemId);
@@ -117,9 +124,13 @@ public class TaskServiceImpl implements TaskService {
     }
 
     private void checkOrder(UUID orderId) {
-	OrderDetail order = orderMap.get(orderId);
+	OrderDetail order = orderRepo.getOrder(orderId);
 	if (null == order) {
 	    System.err.printf("Missing order %s for checking%n", orderId);
+	    return;
+	}
+	if (!order.getPlacedOrder()) {
+	    System.err.printf("Incomplete order %s%n", orderId);
 	    return;
 	}
 
@@ -137,7 +148,7 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public void deliverOrder(UUID orderId) {
-	OrderDetail order = orderMap.remove(orderId);
+	OrderDetail order = orderRepo.removeOrder(orderId);
 	if (null == order) {
 	    System.err.printf("Missing order %s for delivery%n", orderId);
 	    return;
@@ -145,8 +156,8 @@ public class TaskServiceImpl implements TaskService {
 	System.out.printf("Deliver order %s%n", orderId);
 	for (ItemDetail i : order.getItemList()) {
 	    UUID itemId = i.getItemId();
-	    if (itemMap.containsKey(itemId)) {
-		long expiredQty = i.getExpiredQty(itemMap.get(itemId).getExpiryTimeMillis());
+	    if (itemCache.containsKey(itemId)) {
+		long expiredQty = i.getExpiredQty(itemCache.get(itemId).getExpiryTimeMillis());
 		if (expiredQty > 0) {
 		    System.out.printf("Order %s item %s expired Qty %d%n", orderId, itemId, expiredQty);
 		}
@@ -155,11 +166,11 @@ public class TaskServiceImpl implements TaskService {
     }
 
     private Long getItemPrepareMillis(UUID itemId) {
-	if (!itemMap.containsKey(itemId)) {
-	    itemMap.putIfAbsent(itemId, itemService.getItem(itemId));
+	if (!itemCache.containsKey(itemId)) {
+	    itemCache.putIfAbsent(itemId, itemService.getItem(itemId));
 	}
-	if (itemMap.containsKey(itemId)) {
-	    return itemMap.get(itemId).getPrepareTimeMillis();
+	if (itemCache.containsKey(itemId)) {
+	    return itemCache.get(itemId).getPrepareTimeMillis();
 	}
 	return 0L;
     }

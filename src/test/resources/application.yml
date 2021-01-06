@@ -10,11 +10,11 @@ management:
 org:
   jobrunr:
     background-job-server:
-      enabled: true
+      enabled: false
       poll_interval: 1      # check for new work every 1 seconds
       worker_count:  1000   # number of workers
       delete_succeeded_jobs_after: 36  # mark succeeded jobs for deletion after 36 hours
       permanently_delete_deleted_jobs_after: 72  # deleted jobs will be deleted permanently after 72 hours
     dashboard:
-      enabled: true
+      enabled: false
       port: 9100         # the port on which to start the dashboard
