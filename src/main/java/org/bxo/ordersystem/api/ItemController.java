@@ -31,8 +31,8 @@ public class ItemController {
 		@RequestParam(name="name", required=true) String name,
 		@RequestParam(name="prepareMillis", required=true) long prepareTimeMillis,
 		@RequestParam(name="expiryMillis", required=true) long expiryTimeMillis) {
-	return itemService.createItem(
-		UUID.randomUUID(), name,
+	return createTestItem(
+		UUID.randomUUID().toString(), name,
 		prepareTimeMillis, expiryTimeMillis);
     }
 

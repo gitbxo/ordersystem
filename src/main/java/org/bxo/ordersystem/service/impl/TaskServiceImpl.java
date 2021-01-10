@@ -2,7 +2,6 @@ package org.bxo.ordersystem.service.impl;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +16,7 @@ import org.bxo.ordersystem.api.model.ItemInfo;
 import org.bxo.ordersystem.model.ItemDetail;
 import org.bxo.ordersystem.model.OrderDetail;
 import org.bxo.ordersystem.repository.OrderRepository;
+import org.bxo.ordersystem.service.CourierService;
 import org.bxo.ordersystem.service.ItemService;
 import org.bxo.ordersystem.service.TaskService;
 
@@ -25,6 +25,9 @@ public class TaskServiceImpl implements TaskService {
 
     @Autowired
     private JobScheduler jobScheduler;
+
+    @Autowired
+    private CourierService courierService;
 
     @Autowired
     private ItemService itemService;
@@ -43,17 +46,17 @@ public class TaskServiceImpl implements TaskService {
     public void acceptOrder(UUID orderId) {
 	OrderDetail order = orderRepo.getOrder(orderId);
 	if (null == order) {
-	    System.err.printf("Missing order %s%n", orderId);
+	    System.err.printf("TaskSvc: acceptOrder: Missing order %s%n", orderId);
 	    return;
 	}
-	if (!order.getPlacedOrder()) {
-	    System.err.printf("Incomplete order %s%n", orderId);
+	if (!order.isPlacedOrder()) {
+	    System.err.printf("TaskSvc: acceptOrder: Order %s not submitted%n", orderId);
 	    return;
 	}
 	System.out.printf("Accept order %s%n", orderId);
 
-	Long epochMillis = System.currentTimeMillis();
 	Long availableTime = availableEpochMillis.get();
+	Long epochMillis = System.currentTimeMillis();
 	while (availableTime < epochMillis) {
 	    availableEpochMillis.compareAndSet(availableTime, epochMillis);
 	    availableTime = availableEpochMillis.get();
@@ -93,16 +96,16 @@ public class TaskServiceImpl implements TaskService {
     public void prepareItem(UUID orderId, UUID itemId) {
 	OrderDetail order = orderRepo.getOrder(orderId);
 	if (null == order) {
-	    System.err.printf("Missing order %s to prepare item %s%n", orderId, itemId);
+	    System.err.printf("TaskSvc: prepareItem: Missing order %s to prepare item %s%n", orderId, itemId);
 	    return;
 	}
-	if (!order.getPlacedOrder()) {
-	    System.err.printf("Incomplete order %s%n", orderId);
+	if (!order.isPlacedOrder()) {
+	    System.err.printf("TaskSvc: prepareItem: Order %s not yet submitted%n", orderId);
 	    return;
 	}
 	ItemDetail item = order.getItemDetail(itemId);
 	if (null == item) {
-	    System.err.printf("Order %s missing item %s to prepare%n", orderId, itemId);
+	    System.err.printf("TaskSvc: prepareItem: Order %s missing item %s to prepare%n", orderId, itemId);
 	    return;
 	}
 
@@ -126,11 +129,11 @@ public class TaskServiceImpl implements TaskService {
     private void checkOrder(UUID orderId) {
 	OrderDetail order = orderRepo.getOrder(orderId);
 	if (null == order) {
-	    System.err.printf("Missing order %s for checking%n", orderId);
+	    System.err.printf("TaskSvc: checkOrder: Missing order %s for checking%n", orderId);
 	    return;
 	}
-	if (!order.getPlacedOrder()) {
-	    System.err.printf("Incomplete order %s%n", orderId);
+	if (!order.isPlacedOrder()) {
+	    System.err.printf("TaskSvc: checkOrder: Order %s not yet submitted%n", orderId);
 	    return;
 	}
 
@@ -142,26 +145,7 @@ public class TaskServiceImpl implements TaskService {
 	    }
 	}
 	if (allPrepared) {
-	    jobScheduler.enqueue(() -> this.deliverOrder(orderId));
-	}
-    }
-
-    @Override
-    public void deliverOrder(UUID orderId) {
-	OrderDetail order = orderRepo.removeOrder(orderId);
-	if (null == order) {
-	    System.err.printf("Missing order %s for delivery%n", orderId);
-	    return;
-	}
-	System.out.printf("Deliver order %s%n", orderId);
-	for (ItemDetail i : order.getItemList()) {
-	    UUID itemId = i.getItemId();
-	    if (itemCache.containsKey(itemId)) {
-		long expiredQty = i.getExpiredQty(itemCache.get(itemId).getExpiryTimeMillis());
-		if (expiredQty > 0) {
-		    System.out.printf("Order %s item %s expired Qty %d%n", orderId, itemId, expiredQty);
-		}
-	    }
+	    courierService.readyOrder(orderId);
 	}
     }
 
@@ -173,15 +157,6 @@ public class TaskServiceImpl implements TaskService {
 	    return itemCache.get(itemId).getPrepareTimeMillis();
 	}
 	return 0L;
-    }
-
-    private Callable<String> createTask(int i) {
-	return () -> {
-	    System.out.printf("running task %d. Thread: %s%n",
-			      i,
-			      Thread.currentThread().getName());
-	    return String.format("Task finished %d", i);
-	};
     }
 
 }

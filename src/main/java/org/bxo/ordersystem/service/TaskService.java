@@ -8,6 +8,4 @@ public interface TaskService {
 
     public void prepareItem(UUID orderId, UUID itemId);
 
-    public void deliverOrder(UUID orderId);
-
 }

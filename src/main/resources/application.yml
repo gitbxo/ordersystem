@@ -7,6 +7,14 @@ management:
     port: 9001
     address: 127.0.0.1
 
+ordersystem:
+  courier:
+    # strategy "fifo" picks up any order
+    # strategy "matched" picks up assigned order only
+    strategy: matched
+    min_time_seconds: 3     # courier takes at least 3 seconds to arrive
+    max_time_seconds: 15    # courier takes max 15 seconds to arrive
+
 org:
   jobrunr:
     background-job-server:

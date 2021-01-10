@@ -31,12 +31,6 @@ import org.bxo.ordersystem.service.TaskService;
 public class OrderServiceTest {
 
     @MockBean
-    private ItemService itemService;
-
-    @MockBean
-    private TaskService taskService;
-
-    @MockBean
     private JobRunrAutoConfiguration jobConfig;
 
     @MockBean
@@ -44,6 +38,12 @@ public class OrderServiceTest {
 
     @MockBean
     private JobScheduler jobScheduler;
+
+    @MockBean
+    private ItemService itemService;
+
+    @MockBean
+    private TaskService taskService;
 
     @MockBean
     private OrderRepository orderRepo;
@@ -59,7 +59,7 @@ public class OrderServiceTest {
 	order.addItem(itemId, 5L);
 	Mockito.when(orderRepo.getOrder(orderId)).thenReturn(order);
 
-        OrderInfo orderInfo = orderService.getOrder(orderId);
+	OrderInfo orderInfo = orderService.getOrder(orderId);
 	assertThat(orderInfo.getOrderId(), is(orderId));
 	assertThat(orderInfo.getItemList(), notNullValue());
 	assertThat(orderInfo.getItemList().size(), is(1));
@@ -73,7 +73,8 @@ public class OrderServiceTest {
 	OrderDetail order = new OrderDetail(orderId, null);
 	Mockito.when(orderRepo.createOrder(orderId)).thenReturn(order);
 	Mockito.when(orderRepo.getOrder(orderId)).thenReturn(order);
-        orderService.createOrder(orderId);
+
+	orderService.createOrder(orderId);
 	Mockito.verify(orderRepo).createOrder(orderId);
 	Mockito.verify(orderRepo).getOrder(orderId);
     }
@@ -84,9 +85,10 @@ public class OrderServiceTest {
 	OrderDetail order = new OrderDetail(orderId, null);
 	Mockito.when(orderRepo.getOrder(orderId)).thenReturn(order);
 	Mockito.when(jobScheduler.enqueue(any(JobLambda.class))).thenReturn(null);
-        orderService.createOrder(orderId);
-	Mockito.verify(orderRepo).createOrder(orderId);
+
+	orderService.submitOrder(orderId);
 	Mockito.verify(orderRepo).getOrder(orderId);
+	Mockito.verify(jobScheduler).enqueue(any(JobLambda.class));
     }
 
     @Test

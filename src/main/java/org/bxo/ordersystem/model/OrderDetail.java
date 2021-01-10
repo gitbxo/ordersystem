@@ -1,6 +1,6 @@
 package org.bxo.ordersystem.model;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,13 +23,14 @@ import org.bxo.ordersystem.api.model.OrderItem;
 
 public class OrderDetail {
 
-    private final AtomicBoolean placedOrder;
+    private LocalDateTime placedOrderTime = null;
+    private LocalDateTime readyOrderTime = null;
+    private LocalDateTime courierArrivalTime = null;
     private final UUID orderId;
     private final ConcurrentHashMap<UUID, ItemDetail> itemMap;
 
     public OrderDetail(UUID orderId, List<OrderItem> itemList) {
 	this.orderId = orderId;
-	this.placedOrder = new AtomicBoolean(false);
 	this.itemMap = new ConcurrentHashMap<>();
 	if (null != itemList) {
 	    for (OrderItem item : itemList) {
@@ -52,8 +53,9 @@ public class OrderDetail {
     }
 
     public void addItem(UUID itemId, Long quantity) {
-	if (this.placedOrder.get()) {
-	    throw new JMRuntimeException("Cannot modify a placed order");
+	if (this.isPlacedOrder()) {
+	    throw new JMRuntimeException(
+		"OrderDetail: Cannot modify a placed order : " + getOrderId().toString());
 	}
 	if (null == quantity || quantity <= 0) {
 	    return;
@@ -78,8 +80,9 @@ public class OrderDetail {
     }
 
     public void deleteItem(UUID itemId) {
-	if (this.placedOrder.get()) {
-	    throw new JMRuntimeException("Cannot modify a placed order");
+	if (this.isPlacedOrder()) {
+	    throw new JMRuntimeException(
+		"OrderDetail: Cannot modify a placed order : " + getOrderId().toString());
 	}
 	if (null != itemMap && itemMap.containsKey(itemId)) {
 	    itemMap.remove(itemId);
@@ -87,14 +90,59 @@ public class OrderDetail {
     }
 
     public void placeOrder() {
-	if (this.placedOrder.get()) {
-	    throw new JMRuntimeException("Cannot modify a placed order");
+	if (this.isPlacedOrder()) {
+	    throw new JMRuntimeException(
+		"OrderDetail: Cannot modify a placed order : " + getOrderId().toString());
 	}
-	this.placedOrder.set(true);
+	this.placedOrderTime = LocalDateTime.now();
     }
 
-    public Boolean getPlacedOrder() {
-	return this.placedOrder.get();
+    public boolean isPlacedOrder() {
+	return (null != this.placedOrderTime);
+    }
+
+    public LocalDateTime getPlacedOrderTime() {
+	return this.placedOrderTime;
+    }
+
+    public void readyOrder() {
+	if (!this.isPlacedOrder()) {
+	    throw new JMRuntimeException(
+		"OrderDetail: Must place order before marking ready");
+	}
+	if (this.isReady()) {
+	    throw new JMRuntimeException(
+		"OrderDetail: Order previously marked ready : " + getOrderId().toString());
+	}
+	this.readyOrderTime = LocalDateTime.now();
+    }
+
+    public boolean isReady() {
+	return (null != this.readyOrderTime);
+    }
+
+    public LocalDateTime getReadyOrderTime() {
+	return this.readyOrderTime;
+    }
+
+    public void courierArrived() {
+	if (!this.isPlacedOrder()) {
+	    throw new JMRuntimeException(
+		"OrderDetail: Must place order before courier arrives");
+	}
+	if (this.hasCourier()) {
+	    throw new JMRuntimeException(
+		"OrderDetail: Courier already arrived : " + getOrderId().toString());
+	}
+	this.courierArrivalTime = LocalDateTime.now();
+    }
+
+    public boolean hasCourier() {
+	return (null != this.courierArrivalTime);
+    }
+
+    public LocalDateTime getCourierArrivalTime() {
+	return this.courierArrivalTime;
     }
 
 }

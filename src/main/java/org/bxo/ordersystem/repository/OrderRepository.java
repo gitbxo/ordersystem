@@ -10,6 +10,12 @@ public interface OrderRepository {
 
     public OrderDetail getOrder(UUID orderId);
 
+    public OrderDetail placeOrder(UUID orderId);
+
+    public OrderDetail readyOrder(UUID orderId);
+
+    public OrderDetail courierArrived(UUID orderId);
+
     public OrderDetail removeOrder(UUID orderId);
 
 }

@@ -33,11 +33,38 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
-    public OrderDetail removeOrder(UUID orderId) {
-	if (orderMap.containsKey(orderId)) {
-	    return orderMap.remove(orderId);
+    public OrderDetail placeOrder(UUID orderId) {
+	OrderDetail order = getOrder(orderId);
+	if (null != order)
+	    order.placeOrder();
+	return order;
+    }
+
+    @Override
+    public OrderDetail readyOrder(UUID orderId) {
+	OrderDetail order = getOrder(orderId);
+	if (null != order) {
+	    order.readyOrder();
 	}
-	return null;
+	return order;
+    }
+
+    @Override
+    public OrderDetail courierArrived(UUID orderId) {
+	OrderDetail order = getOrder(orderId);
+	if (null != order) {
+	    order.courierArrived();
+	}
+	return order;
+    }
+
+    @Override
+    public OrderDetail removeOrder(UUID orderId) {
+	if (!orderMap.containsKey(orderId)) {
+	    System.err.printf("removeOrder: Missing order %s%n", orderId);
+	    return null;
+	}
+	return orderMap.remove(orderId);
     }
 
 }
