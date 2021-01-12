@@ -3,10 +3,9 @@ package org.bxo.ordersystem.service;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 import org.jobrunr.autoconfigure.JobRunrAutoConfiguration;
@@ -20,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import org.bxo.ordersystem.api.model.ItemInfo;
 import org.bxo.ordersystem.api.model.OrderInfo;
 import org.bxo.ordersystem.model.OrderDetail;
 import org.bxo.ordersystem.repository.OrderRepository;
@@ -97,6 +97,51 @@ public class OrderServiceTest {
 	Mockito.when(orderRepo.removeOrder(orderId)).thenReturn(null);
 	orderService.deleteOrder(orderId);
 	Mockito.verify(orderRepo).removeOrder(orderId);
+    }
+
+    @Test
+    public void addItem_increments_count() {
+	UUID itemId = UUID.randomUUID();
+	ItemInfo item = new ItemInfo(itemId, itemId.toString(), 7, 9);
+	UUID orderId = UUID.randomUUID();
+	OrderDetail order = new OrderDetail(orderId, null);
+	order.addItem(itemId, 5L);
+
+	Mockito.when(itemService.getItem(itemId)).thenReturn(item);
+	Mockito.when(orderRepo.getOrder(orderId)).thenReturn(order);
+	orderService.addItem(orderId, itemId, 2L);
+
+	Mockito.verify(orderRepo, Mockito.times(2)).getOrder(orderId);
+	assertThat(order.getItemDetail(itemId), notNullValue());
+	assertThat(order.getItemDetail(itemId).getQuantity(), is(7L));
+    }
+
+    @Test
+    public void addItem_creates_if_missing() {
+	UUID itemId = UUID.randomUUID();
+	ItemInfo item = new ItemInfo(itemId, itemId.toString(), 7, 9);
+	UUID orderId = UUID.randomUUID();
+	OrderDetail order = new OrderDetail(orderId, null);
+
+	Mockito.when(itemService.getItem(itemId)).thenReturn(item);
+	Mockito.when(orderRepo.getOrder(orderId)).thenReturn(order);
+	orderService.addItem(orderId, itemId, 3L);
+
+	Mockito.verify(orderRepo, Mockito.times(2)).getOrder(orderId);
+	assertThat(order.getItemDetail(itemId), notNullValue());
+	assertThat(order.getItemDetail(itemId).getQuantity(), is(3L));
+    }
+
+    @Test
+    public void deleteItem_removes_item() {
+	UUID orderId = UUID.randomUUID();
+	UUID itemId = UUID.randomUUID();
+	OrderDetail order = new OrderDetail(orderId, null);
+	order.addItem(itemId, 5L);
+	Mockito.when(orderRepo.getOrder(orderId)).thenReturn(order);
+	orderService.deleteItem(orderId, itemId);
+	Mockito.verify(orderRepo, Mockito.times(2)).getOrder(orderId);
+	assertThat(order.getItemDetail(itemId), nullValue());
     }
 
 }

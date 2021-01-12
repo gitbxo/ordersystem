@@ -55,11 +55,11 @@ public class TaskServiceImpl implements TaskService {
 	// Schedule courier pickup when order is placed
 	scheduleCourier(orderId);
 
-	// Calculate the time when order will be ready
-	long orderPrepareTime = calculateOrderPrepareTime(order);
+	// Calculate the approx time when order will be ready
+	long averagePrepareTime = calculateAveragePrepareTime(order);
 
 	// Schedule the items to be prepared
-	schedulePrepareOrder(order, orderPrepareTime);
+	schedulePrepareOrder(order, averagePrepareTime);
 
 	// Check whether order is ready for delivery
 	this.checkOrder(orderId);
@@ -73,7 +73,7 @@ public class TaskServiceImpl implements TaskService {
 		LocalDateTime.now().plusSeconds(travelSeconds));
     }
 
-    private long calculateOrderPrepareTime(OrderDetail order) {
+    private long calculateAveragePrepareTime(OrderDetail order) {
 	long itemCount = 0L;
 	long orderPrepareMillis = 0L;
 	for (ItemDetail item : order.getItemList()) {
