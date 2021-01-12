@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.bxo.ordersystem.model.OrderDetail;
 import org.bxo.ordersystem.repository.OrderRepository;
 import org.bxo.ordersystem.service.CourierService;
+import org.bxo.ordersystem.service.ItemService;
 import org.bxo.ordersystem.service.OrderService;
 
 @SpringBootTest
@@ -37,6 +38,9 @@ public class CourierServiceTest {
     private OrderRepository orderRepo;
 
     @Autowired
+    private ItemService itemService;
+
+    @Autowired
     private OrderService orderService;
 
     @Autowired
@@ -46,6 +50,7 @@ public class CourierServiceTest {
     public void pickupOrder_notReady_keeps_order() {
 	UUID orderId = UUID.randomUUID();
 	UUID itemId = UUID.randomUUID();
+
 	OrderDetail order = orderRepo.createOrder(orderId);
 	order.addItem(itemId, 5L);
 	orderRepo.placeOrder(orderId);
@@ -59,11 +64,13 @@ public class CourierServiceTest {
     public void pickupOrder_isReady_deletes_order() {
 	UUID orderId = UUID.randomUUID();
 	UUID itemId = UUID.randomUUID();
+
 	OrderDetail order = orderRepo.createOrder(orderId);
 	order.addItem(itemId, 5L);
 	orderRepo.placeOrder(orderId);
 	courierService.readyOrder(orderId);
 
+	itemService.createItem(itemId, "item name", 7L, 9L);
 	courierService.pickupOrder(orderId);
 	assertThat(orderRepo.getOrder(orderId), nullValue());
     }
@@ -72,6 +79,7 @@ public class CourierServiceTest {
     public void readyOrder_noCourier_keeps_order() {
 	UUID orderId = UUID.randomUUID();
 	UUID itemId = UUID.randomUUID();
+
 	OrderDetail order = orderRepo.createOrder(orderId);
 	order.addItem(itemId, 5L);
 	orderRepo.placeOrder(orderId);
@@ -85,11 +93,13 @@ public class CourierServiceTest {
     public void readyOrder_hasCourier_deletes_order() {
 	UUID orderId = UUID.randomUUID();
 	UUID itemId = UUID.randomUUID();
+
 	OrderDetail order = orderRepo.createOrder(orderId);
 	order.addItem(itemId, 5L);
 	orderRepo.placeOrder(orderId);
 	courierService.pickupOrder(orderId);
 
+	itemService.createItem(itemId, "item name", 7L, 9L);
 	courierService.readyOrder(orderId);
 	assertThat(orderRepo.getOrder(orderId), nullValue());
     }

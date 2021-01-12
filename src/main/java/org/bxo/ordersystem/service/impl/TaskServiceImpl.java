@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import org.bxo.ordersystem.api.model.ItemInfo;
 import org.bxo.ordersystem.model.ItemDetail;
 import org.bxo.ordersystem.model.OrderDetail;
 import org.bxo.ordersystem.repository.OrderRepository;
@@ -41,7 +40,7 @@ public class TaskServiceImpl implements TaskService {
     @Value("${org.jobrunr.background-job-server.worker_count}")
     private Long workerCount;
 
-    private static ConcurrentHashMap<UUID, ItemInfo> itemCache = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<UUID, Long> itemCache = new ConcurrentHashMap<>();
 
     @Override
     public void acceptOrder(UUID orderId) {
@@ -95,13 +94,10 @@ public class TaskServiceImpl implements TaskService {
 	    long itemScheduleSeconds = (
 		prepareTime - getItemPrepareMillis(item.getItemId())) / 1000L;
 	    for (int i=0; i < item.getQuantity(); i++) {
-		if (itemScheduleSeconds > 0) {
-		    jobScheduler.schedule(
-			() -> this.prepareItem(orderId, itemId),
-			LocalDateTime.now().plusSeconds(itemScheduleSeconds));
-		} else {
-		    jobScheduler.enqueue(() -> this.prepareItem(orderId, itemId));
-		}
+		jobScheduler.schedule(
+		    () -> this.prepareItem(orderId, itemId),
+		    LocalDateTime.now().plusSeconds(
+			itemScheduleSeconds < 1 ? 1 : itemScheduleSeconds));
 	    }
 	}
     }
@@ -132,7 +128,7 @@ public class TaskServiceImpl implements TaskService {
 	}
 	long newQty = item.addPreparedQty(1);
 	System.out.printf(
-		"Order %s prepared item %s qty %d of %d%n", orderId, itemId,
+		"TaskSvc: Order %s prepared item %s qty %d of %d%n", orderId, itemId,
 		newQty, item.getQuantity());
 
 	if (newQty >= item.getQuantity()) {
@@ -159,16 +155,21 @@ public class TaskServiceImpl implements TaskService {
 	    }
 	}
 	if (allPrepared) {
-	    courierService.readyOrder(orderId);
+	    jobScheduler.schedule(
+		() -> courierService.readyOrder(orderId),
+		LocalDateTime.now().plusSeconds(1));
+	    // jobScheduler.enqueue(
+	    // 	() -> courierService.readyOrder(orderId));
 	}
     }
 
     private Long getItemPrepareMillis(UUID itemId) {
 	if (!itemCache.containsKey(itemId)) {
-	    itemCache.putIfAbsent(itemId, itemService.getItem(itemId));
+	    itemCache.putIfAbsent(
+		itemId, itemService.getItem(itemId).getPrepareTimeMillis());
 	}
 	if (itemCache.containsKey(itemId)) {
-	    return itemCache.get(itemId).getPrepareTimeMillis();
+	    return itemCache.get(itemId);
 	}
 	return 0L;
     }
