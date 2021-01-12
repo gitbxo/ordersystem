@@ -2,6 +2,7 @@ package org.bxo.ordersystem.service.impl;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,10 @@ import org.bxo.ordersystem.service.CourierService;
 @ConditionalOnProperty(
 	name="ordersystem.courier.strategy", havingValue="fifo")
 public class FifoCourierServiceImpl implements CourierService {
+
+    private static AtomicLong orderCount = new AtomicLong(0L);
+    private static AtomicLong orderWait = new AtomicLong(0L);
+    private static AtomicLong courierWait = new AtomicLong(0L);
 
     private static ConcurrentLinkedQueue<UUID> orderQ = new ConcurrentLinkedQueue<>();
 
@@ -33,10 +38,12 @@ public class FifoCourierServiceImpl implements CourierService {
 
     @Override
     public void pickupOrder(UUID courierId) {
-	System.out.printf("Courier %s arrived for pickup%n", courierId);
+	System.out.printf("FifoCourierSvc: Courier %s arrived for pickup%n", courierId);
+	long courierArrivalMillis = System.currentTimeMillis();
 
 	UUID orderId = null;
-	while (true) {
+	OrderDetail order = null;
+	while (null == order) {
 	    orderId = orderQ.poll();
 	    if (null == orderId) {
 		try {
@@ -45,26 +52,39 @@ public class FifoCourierServiceImpl implements CourierService {
 		}
 		continue;
 	    }
-	    OrderDetail order = orderRepo.getOrder(orderId);
+	    order = orderRepo.getOrder(orderId);
 	    if (null == order) {
 		System.err.printf("FifoCourierSvc: pickupOrder: Missing order %s for pickup%n", orderId);
-		continue;
 	    }
-	    if (!order.isPlacedOrder()) {
+	    if (null != order && !order.isPlacedOrder()) {
 		System.err.printf("FifoCourierSvc: deliverOrder: Order %s not yet submitted%n", orderId);
-		continue;
+		order = null;
 	    }
-	    if (!order.isReady()) {
+	    if (null != order && !order.isReady()) {
 		System.err.printf("FifoCourierSvc: deliverOrder: Order %s not yet ready%n", orderId);
-		continue;
+		order = null;
 	    }
-	    if (null != orderRepo.removeOrder(orderId)) {
+	    if (null != order && null == orderRepo.removeOrder(orderId)) {
 		System.err.printf("FifoCourierSvc: deliverOrder: Duplicate pickup for order %s%n", orderId);
-		continue;
+		order = null;
 	    }
-	    break;
 	}
 	System.out.printf("FifoCourierSvc: Courier %s delivered order %s%n", courierId, orderId);
+
+	long pickupMillis = System.currentTimeMillis();
+	long orderReadyMillis = order.getReadyOrderMillis();
+
+	// Average food wait time (milliseconds) between order ready and pickup
+	long myOrderCount = orderCount.addAndGet(1L);
+	long totalOrderWait = orderWait.addAndGet(pickupMillis - orderReadyMillis);
+	System.out.printf("%n%nAverage food wait time : %3.0f millis%n",
+			  (totalOrderWait * 1.0 / myOrderCount));
+
+	// Average courier wait time (milliseconds) between arrival and order pickup
+	long totalCourierWait = courierWait.addAndGet(pickupMillis - courierArrivalMillis);
+	System.out.printf("Average courier wait time : %3.0f millis%n%n%n",
+			  (totalCourierWait * 1.0 / myOrderCount));
+
     }
 
 }

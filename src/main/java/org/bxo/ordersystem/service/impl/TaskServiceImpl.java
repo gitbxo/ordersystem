@@ -1,10 +1,7 @@
 package org.bxo.ordersystem.service.impl;
 
 import java.time.LocalDateTime;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 import org.jobrunr.scheduling.JobScheduler;
@@ -35,48 +32,68 @@ public class TaskServiceImpl implements TaskService {
     @Autowired
     private OrderRepository orderRepo;
 
+    @Value("${ordersystem.courier.min_time_seconds:3}")
+    private Long courierMinSeconds;
+
+    @Value("${ordersystem.courier.max_time_seconds:15}")
+    private Long courierMaxSeconds;
+
     @Value("${org.jobrunr.background-job-server.worker_count}")
     private Long workerCount;
 
     private static ConcurrentHashMap<UUID, ItemInfo> itemCache = new ConcurrentHashMap<>();
 
-    private static AtomicLong availableEpochMillis = new AtomicLong(0L);
-
     @Override
     public void acceptOrder(UUID orderId) {
-	OrderDetail order = orderRepo.getOrder(orderId);
+	System.out.printf("TaskSvc: Accept order %s%n", orderId);
+	OrderDetail order = orderRepo.placeOrder(orderId);
 	if (null == order) {
 	    System.err.printf("TaskSvc: acceptOrder: Missing order %s%n", orderId);
 	    return;
 	}
-	if (!order.isPlacedOrder()) {
-	    System.err.printf("TaskSvc: acceptOrder: Order %s not submitted%n", orderId);
-	    return;
-	}
-	System.out.printf("Accept order %s%n", orderId);
 
-	Long availableTime = availableEpochMillis.get();
-	Long epochMillis = System.currentTimeMillis();
-	while (availableTime < epochMillis) {
-	    availableEpochMillis.compareAndSet(availableTime, epochMillis);
-	    availableTime = availableEpochMillis.get();
-	}
+	// Schedule courier pickup when order is placed
+	scheduleCourier(orderId);
 
+	// Calculate the time when order will be ready
+	long orderPrepareTime = calculateOrderPrepareTime(order);
+
+	// Schedule the items to be prepared
+	schedulePrepareOrder(order, orderPrepareTime);
+
+	// Check whether order is ready for delivery
+	this.checkOrder(orderId);
+    }
+
+    private void scheduleCourier(UUID orderId) {
+	long travelSeconds = courierMinSeconds + (long) Math.floor(
+		Math.random() * ( courierMaxSeconds + 1 - courierMinSeconds ));
+	jobScheduler.schedule(
+		() -> courierService.pickupOrder(orderId),
+		LocalDateTime.now().plusSeconds(travelSeconds));
+    }
+
+    private long calculateOrderPrepareTime(OrderDetail order) {
+	long itemCount = 0L;
 	long orderPrepareMillis = 0L;
 	for (ItemDetail item : order.getItemList()) {
 	    long itemPrepareMillis = getItemPrepareMillis(item.getItemId()) * item.getQuantity();
+	    itemCount += item.getQuantity();
 	    orderPrepareMillis += itemPrepareMillis;
 	}
 	if (orderPrepareMillis > 0L) {
-	    availableTime = availableEpochMillis.addAndGet(
-		orderPrepareMillis / workerCount);
+	    return (orderPrepareMillis / (
+		    itemCount < workerCount ? itemCount : workerCount));
 	}
+	return 1L;
+    }
 
+    private void schedulePrepareOrder(OrderDetail order, Long prepareTime) {
+	UUID orderId = order.getOrderId();
 	for (ItemDetail item : order.getItemList()) {
 	    UUID itemId = item.getItemId();
 	    long itemScheduleSeconds = (
-		availableTime - getItemPrepareMillis(item.getItemId())
-		- epochMillis ) / 1000L;
+		prepareTime - getItemPrepareMillis(item.getItemId())) / 1000L;
 	    for (int i=0; i < item.getQuantity(); i++) {
 		if (itemScheduleSeconds > 0) {
 		    jobScheduler.schedule(
@@ -87,9 +104,6 @@ public class TaskServiceImpl implements TaskService {
 		}
 	    }
 	}
-
-	// Check whether order is ready for delivery
-	this.checkOrder(orderId);
     }
 
     @Override

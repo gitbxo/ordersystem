@@ -1,6 +1,6 @@
 package org.bxo.ordersystem.model;
 
-import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,9 +23,9 @@ import org.bxo.ordersystem.api.model.OrderItem;
 
 public class OrderDetail {
 
-    private LocalDateTime placedOrderTime = null;
-    private LocalDateTime readyOrderTime = null;
-    private LocalDateTime courierArrivalTime = null;
+    private AtomicLong placedOrderMillis = new AtomicLong(0L);
+    private AtomicLong readyOrderMillis = new AtomicLong(0L);
+    private AtomicLong courierArrivalMillis = new AtomicLong(0L);
     private final UUID orderId;
     private final ConcurrentHashMap<UUID, ItemDetail> itemMap;
 
@@ -90,19 +90,18 @@ public class OrderDetail {
     }
 
     public void placeOrder() {
-	if (this.isPlacedOrder()) {
+	if (!placedOrderMillis.compareAndSet(0L, System.currentTimeMillis())) {
 	    throw new JMRuntimeException(
 		"OrderDetail: Cannot modify a placed order : " + getOrderId().toString());
 	}
-	this.placedOrderTime = LocalDateTime.now();
     }
 
     public boolean isPlacedOrder() {
-	return (null != this.placedOrderTime);
+	return (this.placedOrderMillis.get() > 0L);
     }
 
-    public LocalDateTime getPlacedOrderTime() {
-	return this.placedOrderTime;
+    public long getPlacedOrderMillis() {
+	return this.placedOrderMillis.get();
     }
 
     public void readyOrder() {
@@ -110,19 +109,18 @@ public class OrderDetail {
 	    throw new JMRuntimeException(
 		"OrderDetail: Must place order before marking ready");
 	}
-	if (this.isReady()) {
+	if (!readyOrderMillis.compareAndSet(0L, System.currentTimeMillis())) {
 	    throw new JMRuntimeException(
 		"OrderDetail: Order previously marked ready : " + getOrderId().toString());
 	}
-	this.readyOrderTime = LocalDateTime.now();
     }
 
     public boolean isReady() {
-	return (null != this.readyOrderTime);
+	return (this.readyOrderMillis.get() > 0L);
     }
 
-    public LocalDateTime getReadyOrderTime() {
-	return this.readyOrderTime;
+    public long getReadyOrderMillis() {
+	return this.readyOrderMillis.get();
     }
 
     public void courierArrived() {
@@ -130,19 +128,18 @@ public class OrderDetail {
 	    throw new JMRuntimeException(
 		"OrderDetail: Must place order before courier arrives");
 	}
-	if (this.hasCourier()) {
+	if (!courierArrivalMillis.compareAndSet(0L, System.currentTimeMillis())) {
 	    throw new JMRuntimeException(
 		"OrderDetail: Courier already arrived : " + getOrderId().toString());
 	}
-	this.courierArrivalTime = LocalDateTime.now();
     }
 
     public boolean hasCourier() {
-	return (null != this.courierArrivalTime);
+	return (this.courierArrivalMillis.get() > 0L);
     }
 
-    public LocalDateTime getCourierArrivalTime() {
-	return this.courierArrivalTime;
+    public long getCourierArrivalMillis() {
+	return this.courierArrivalMillis.get();
     }
 
 }
