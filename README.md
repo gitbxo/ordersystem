@@ -9,6 +9,9 @@ This allows placing Orders for items and having them delivered.
 Note: Must install maven and JDK11 to build and run the program
 ```mvn spring-boot:run```
 
+Run the simulated orders using python3:
+```python3 src/simulator/simulator.py Downloads/dispatch_orders.json```
+
 
 # Configuration
 File ```src/main/application.yml``` has parameters to configure the
